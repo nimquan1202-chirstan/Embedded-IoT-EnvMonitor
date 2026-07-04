@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Giám Sát Môi Trường IoT</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+    <style>
+        /* ======================================================
+           RESET & BASE
+        ====================================================== */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-root:    #020617;
+            --bg-card:    #0f172a;
+            --bg-deep:    #0a1120;
+            --border:     #1e293b;
+            --border-mid: #334155;
+            --text-main:  #e2e8f0;
+            --text-muted: #64748b;
+            --text-dim:   #475569;
+            --accent:     #38bdf8;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-root);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        /* ======================================================
+           HEADER
+        ====================================================== */
+        .app-header {
+            background: #0d1b2a;
+            padding: 12px 28px;
+            display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid #1e3a5f;
+            position: sticky; top: 0; z-index: 200;
+        }
+        .header-brand { display: flex; align-items: center; gap: 12px; }
+        .conn-dot {
+            width: 9px; height: 9px; border-radius: 50%;
+            background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.2);
+            transition: background .3s, box-shadow .3s; flex-shrink: 0;
+        }
+        .brand-title { font-size: 14px; font-weight: 600; color: var(--text-main); }
+        .brand-sub   { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+        .weather-pill {
+            background: #1e3a5f; border: 1px solid #2d5a8e;
+            border-radius: 20px; padding: 5px 14px;
+            font-size: 12px; color: #93c5fd;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .sampling-pill {
+            font-size: 10px; color: #475569;
+            background: #0f172a; border: 1px solid var(--border);
+            border-radius: 4px; padding: 3px 8px;
+            display: flex; align-items: center; gap: 4px;
+        }
+
+        /* ======================================================
+           BADGE
+        ====================================================== */
+        .badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 4px 10px; border-radius: 5px;
+            font-size: 11px; font-weight: 600; transition: all .25s;
+        }
+        .badge-ok   { background:#052e16; color:#4ade80; border:1px solid #166534; }
+        .badge-warn { background:#431407; color:#fb923c; border:1px solid #7c2d12; }
+        .badge-err  { background:#1c0a0a; color:#f87171; border:1px solid #450a0a; }
+        .badge-info { background:#2e1065; color:#c4b5fd; border:1px solid #6d28d9; }
+
+        /* ======================================================
+           STATUS BANNER
+        ====================================================== */
+        #status-banner {
+            padding: 10px 28px; font-size: 12px; font-weight: 500;
+            display: flex; align-items: center; gap: 8px;
+            transition: background .3s, color .3s;
+        }
+        #status-banner .ts { margin-left: auto; opacity: .5; font-weight: 400; }
+
+        /* ======================================================
+           NAVBAR
+        ====================================================== */
+        .app-nav {
+            background: #0f172a; border-bottom: 1px solid var(--border);
+            display: flex; padding: 0 28px; gap: 2px;
+        }
+        .menu-btn {
+            padding: 11px 18px; font-size: 13px; color: var(--text-muted);
+            border: none; background: none; cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: color .15s, border-color .15s;
+            display: flex; align-items: center; gap: 6px; font-family: inherit;
+        }
+        .menu-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .menu-btn:hover:not(.active) { color: #94a3b8; }
+
+        /* ======================================================
+           MAIN LAYOUT
+        ====================================================== */
+        .main-content { padding: 22px 28px; }
+        .section-title {
+            font-size: 10px; font-weight: 600; color: var(--text-dim);
+            letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 14px;
+        }
+
+        /* ======================================================
+           TOP ROW
+        ====================================================== */
+        /* Sensor metrics — full width, 3 equal columns */
+        .metrics-group { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 20px; }
+        .metric-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; padding: 16px 18px; position: relative; overflow: hidden;
+        }
+        .metric-card::before {
+            content:''; position:absolute; top:0; left:0; right:0; height:2px;
+        }
+        .metric-card.temp::before { background: linear-gradient(90deg,#ef4444,#f97316); }
+        .metric-card.hum::before  { background: linear-gradient(90deg,#3b82f6,#06b6d4); }
+        .metric-card.dew::before  { background: linear-gradient(90deg,#8b5cf6,#a78bfa); }
+        .metric-label {
+            font-size: 10px; color: var(--text-muted);
+            margin-bottom: 6px; display: flex; align-items: center; gap: 5px;
+        }
+        .metric-value { font-size: 30px; font-weight: 700; line-height: 1; }
+        .metric-card.temp .metric-value { color: #fca5a5; }
+        .metric-card.hum  .metric-value { color: #93c5fd; }
+        .metric-card.dew  .metric-value { color: #c4b5fd; }
+        .metric-unit { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+        .metric-bg-icon {
+            position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+            font-size: 36px; opacity: .06;
+        }
+
+        /* Min/Max bar inside metric card */
+        .metric-minmax {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border);
+        }
+        .minmax-item { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+        .minmax-label { color: var(--text-muted); font-size: 10px; }
+        .minmax-val   { font-weight: 600; }
+        .metric-card.temp .minmax-val.max { color: #fca5a5; }
+        .metric-card.temp .minmax-val.min { color: #67e8f9; }
+        .metric-card.hum  .minmax-val.max { color: #93c5fd; }
+        .metric-card.hum  .minmax-val.min { color: #c4b5fd; }
+        .metric-card.dew  .minmax-val.max { color: #c4b5fd; }
+        .metric-card.dew  .minmax-val.min { color: #a5f3fc; }
+        /* Progress bar showing current value between min and max */
+        .minmax-bar-wrap { margin-top: 6px; }
+        .minmax-bar-track { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+        .minmax-bar-fill  { height: 100%; border-radius: 2px; transition: width .4s ease; }
+        .metric-card.temp .minmax-bar-fill { background: linear-gradient(90deg,#06b6d4,#ef4444); }
+        .metric-card.hum  .minmax-bar-fill { background: linear-gradient(90deg,#c4b5fd,#3b82f6); }
+        .metric-card.dew  .minmax-bar-fill { background: linear-gradient(90deg,#a5f3fc,#8b5cf6); }
+
+        /* ======================================================
+           CHART
+        ====================================================== */
+        .chart-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; padding: 18px 22px; margin-bottom: 20px;
+        }
+        .chart-header {
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
+        }
+        .chart-title { font-size: 13px; font-weight: 500; color: #94a3b8; display: flex; align-items: center; gap: 7px; }
+        .chart-legend { display: flex; gap: 16px; }
+        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
+        .legend-dot  { width: 8px; height: 8px; border-radius: 50%; }
+
+        /* ======================================================
+           BOTTOM GRID
+        ====================================================== */
+        .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .panel {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; padding: 18px 22px;
+        }
+        .panel-title {
+            font-size: 10px; font-weight: 600; color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px;
+            padding-bottom: 10px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 6px;
+        }
+        .rec-label { font-size: 11px; color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+        .rec-text  { font-size: 13px; color: #94a3b8; margin-bottom: 14px; line-height: 1.6; }
+
+        /* ======================================================
+           CHART RANGE BUTTONS
+        ====================================================== */
+        .chart-controls { display: flex; align-items: center; gap: 14px; }
+        .range-group    { display: flex; gap: 4px; }
+        .range-btn {
+            padding: 4px 12px; font-size: 11px; font-weight: 600;
+            border: 1px solid var(--border-mid); border-radius: 6px;
+            background: transparent; color: var(--text-muted);
+            cursor: pointer; font-family: inherit; transition: all .15s;
+        }
+        .range-btn:hover  { background: #1e293b; color: #94a3b8; }
+        .range-btn.active { background: var(--accent); border-color: var(--accent); color: #0f172a; }
+        .chart-subtitle { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+        /* ======================================================
+           FORM CONTROLS
+        ====================================================== */
+        .form-row { margin-bottom: 12px; }
+        .form-label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 5px; }
+        .form-input, .form-select {
+            width: 100%; background: var(--bg-deep); border: 1px solid var(--border);
+            border-radius: 7px; padding: 8px 12px;
+            font-size: 13px; color: var(--text-main); outline: none;
+            transition: border-color .15s; font-family: inherit;
+        }
+        .form-input:focus, .form-select:focus { border-color: var(--accent); }
+
+        /* ======================================================
+           EMAIL ALERT SECTION
+        ====================================================== */
+        .email-section {
+            margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border);
+        }
+        .email-section-title {
+            font-size: 10px; font-weight: 600; color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: .8px; margin-bottom: 12px;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .email-toggle-row {
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+        }
+        .toggle-label { font-size: 12px; color: #94a3b8; }
+        .toggle { position: relative; width: 40px; height: 22px; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute; cursor: pointer; inset: 0;
+            background: #1e293b; border-radius: 22px;
+            transition: .3s; border: 1px solid var(--border-mid);
+        }
+        .toggle-slider::before {
+            content:''; position:absolute;
+            width:16px; height:16px; border-radius:50%;
+            background:#64748b; bottom:2px; left:2px; transition:.3s;
+        }
+        .toggle input:checked + .toggle-slider { background:#0ea5e9; border-color:#0284c7; }
+        .toggle input:checked + .toggle-slider::before { background:#fff; transform:translateX(18px); }
+
+        .email-status {
+            font-size: 11px; padding: 6px 10px; border-radius: 6px;
+            margin-top: 8px; display: none; align-items: center; gap: 6px;
+        }
+        .email-status.sending { display:flex; background:#0c2a4a; color:#93c5fd; border:1px solid #1e3a5f; }
+        .email-status.sent    { display:flex; background:#052e16; color:#4ade80; border:1px solid #166534; }
+        .email-status.error   { display:flex; background:#1c0a0a; color:#f87171; border:1px solid #450a0a; }
+
+        .cooldown-wrap { display:none; margin-top:8px; }
+        .cooldown-wrap.active { display:block; }
+        .cooldown-label {
+            font-size: 10px; color: var(--text-muted); margin-bottom: 4px;
+            display: flex; justify-content: space-between;
+        }
+        .cooldown-track { height:4px; background:var(--border); border-radius:2px; overflow:hidden; }
+        .cooldown-fill  { height:100%; background:var(--accent); border-radius:2px; transition:width .5s linear; }
+
+        .btn-primary {
+            width: 100%; background: #0ea5e9; border: none; border-radius: 7px;
+            padding: 9px; font-size: 13px; font-weight: 600; color: #fff;
+            cursor: pointer; display: flex; align-items: center;
+            justify-content: center; gap: 6px;
+            transition: background .15s; font-family: inherit; margin-bottom: 6px;
+        }
+        .btn-primary:hover { background: #0284c7; }
+        .btn-secondary {
+            width: 100%; background: #1e293b; border: 1px solid var(--border-mid);
+            border-radius: 7px; padding: 9px; font-size: 13px; font-weight: 600;
+            color: #94a3b8; cursor: pointer; display: flex; align-items: center;
+            justify-content: center; gap: 6px;
+            transition: background .15s; font-family: inherit;
+        }
+        .btn-secondary:hover { background: #273549; color: var(--text-main); }
+
+        /* ======================================================
+           HISTORY VIEW
+        ====================================================== */
+        .history-toolbar {
+            display: flex; align-items: center;
+            justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap;
+        }
+        .export-btn {
+            display: flex; align-items: center; gap: 7px;
+            padding: 8px 16px; background: #1e293b; border: 1px solid var(--border-mid);
+            border-radius: 7px; font-size: 12px; color: #94a3b8; cursor: pointer;
+            transition: background .15s; font-family: inherit; white-space: nowrap;
+        }
+        .export-btn:hover { background: #273549; color: var(--text-main); }
+        .date-input {
+            background: var(--bg-deep); border: 1px solid var(--border);
+            border-radius: 7px; padding: 8px 12px;
+            font-size: 13px; color: var(--text-main);
+            outline: none; font-family: inherit;
+        }
+        .date-input:focus { border-color: var(--accent); }
+        .history-table-wrap {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; overflow: hidden;
+        }
+        .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .history-table th {
+            text-align: left; padding: 10px 18px; color: var(--text-dim);
+            font-size: 10px; font-weight: 600; border-bottom: 1px solid var(--border);
+            text-transform: uppercase; letter-spacing: .8px; background: #0a111e;
+        }
+        .history-table td {
+            padding: 9px 18px; color: #94a3b8; border-bottom: 1px solid #0d1825;
+        }
+        .history-table tr:last-child td { border-bottom: none; }
+        .history-table tr:hover td { background: #111827; }
+        .col-temp { color: #fca5a5 !important; font-weight: 500; }
+        .col-hum  { color: #93c5fd !important; font-weight: 500; }
+        .empty-state { text-align: center; color: #334155; padding: 36px; font-size: 13px; }
+
+        /* ======================================================
+           RESPONSIVE
+        ====================================================== */
+        @media (max-width: 900px) {
+            .top-row       { grid-template-columns: 1fr; }
+            .metrics-group { grid-template-columns: 1fr 1fr 1fr; }
+            .bottom-grid   { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ===================== HEADER ===================== -->
+<header class="app-header">
+    <div class="header-brand">
+        <div class="conn-dot" id="conn-dot"></div>
+        <div>
+            <div class="brand-title">
+                <i class="ti ti-cpu" style="margin-right:5px;font-size:14px;vertical-align:-2px"></i>
+                IoT Environment Monitor
+            </div>
+            <div class="brand-sub">ESP32-Gateway + STM32 Sensor Node · Crow C++ Backend</div>
+        </div>
+    </div>
+    <div class="header-right">
+        <div class="sampling-pill" title="Tần số lấy mẫu thích ứng động (Adaptive Sampling)">
+            <i class="ti ti-refresh"></i> <span id="sampling-label">— s</span>
+        </div>
+        <div class="weather-pill">
+            <i class="ti ti-cloud"></i>
+            <span id="weather-info">Đang tải...</span>
+        </div>
+        <span class="badge badge-ok" id="conn-badge">
+            <i class="ti ti-wifi"></i> Trực tuyến
+        </span>
+    </div>
+</header>
+
+<!-- ===================== STATUS BANNER ===================== -->
+<div id="status-banner" style="background:#052e16;color:#4ade80;border-bottom:1px solid #166534">
+    <i class="ti ti-circle-check" style="font-size:14px"></i>
+    <span id="status-text">Đang khởi tạo hệ thống...</span>
+    <span class="ts" id="status-time"></span>
+</div>
+
+<!-- ===================== NAVBAR ===================== -->
+<nav class="app-nav">
+    <button class="menu-btn active" id="btn-menu-dash" onclick="switchTab('dashboard')">
+        <i class="ti ti-layout-dashboard"></i> Bảng Giám Sát
+    </button>
+    <button class="menu-btn" id="btn-menu-hist" onclick="switchTab('history')">
+        <i class="ti ti-clock-hour-4"></i> Lịch Sử Dữ Liệu
+    </button>
+</nav>
+
+<!-- ===================== DASHBOARD VIEW ===================== -->
+<div class="main-content" id="dashboard-view">
+
+    <!-- SENSOR CARDS — với Min/Max tích hợp bên trong từng card -->
+    <div class="section-title">
+        <i class="ti ti-broadcast" style="margin-right:5px;vertical-align:-1px"></i>Đọc số liệu thời gian thực
+    </div>
+    <div class="metrics-group">
+
+        <!-- Nhiệt độ -->
+        <div class="metric-card temp">
+            <i class="ti ti-thermometer metric-bg-icon"></i>
+            <div class="metric-label"><i class="ti ti-thermometer"></i> Nhiệt Độ</div>
+            <div class="metric-value" id="card-temp">—</div>
+            <div class="metric-unit">°C</div>
+            <div class="minmax-bar-wrap">
+                <div class="minmax-bar-track">
+                    <div class="minmax-bar-fill" id="bar-temp" style="width:50%"></div>
+                </div>
+            </div>
+            <div class="metric-minmax">
+                <div class="minmax-item">
+                    <span class="minmax-label">Min</span>
+                    <span class="minmax-val min" id="stat-min-temp">—</span>
+                    <span class="minmax-label">°C</span>
+                </div>
+                <div class="minmax-item">
+                    <span class="minmax-label">Max</span>
+                    <span class="minmax-val max" id="stat-max-temp">—</span>
+                    <span class="minmax-label">°C</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Độ ẩm -->
+        <div class="metric-card hum">
+            <i class="ti ti-droplet metric-bg-icon"></i>
+            <div class="metric-label"><i class="ti ti-droplet"></i> Độ Ẩm</div>
+            <div class="metric-value" id="card-hum">—</div>
+            <div class="metric-unit">% RH</div>
+            <div class="minmax-bar-wrap">
+                <div class="minmax-bar-track">
+                    <div class="minmax-bar-fill" id="bar-hum" style="width:50%"></div>
+                </div>
+            </div>
+            <div class="metric-minmax">
+                <div class="minmax-item">
+                    <span class="minmax-label">Min</span>
+                    <span class="minmax-val min" id="stat-min-hum">—</span>
+                    <span class="minmax-label">%</span>
+                </div>
+                <div class="minmax-item">
+                    <span class="minmax-label">Max</span>
+                    <span class="minmax-val max" id="stat-max-hum">—</span>
+                    <span class="minmax-label">%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Điểm sương -->
+        <div class="metric-card dew">
+            <i class="ti ti-cloud-fog metric-bg-icon"></i>
+            <div class="metric-label"><i class="ti ti-cloud-fog"></i> Điểm Sương</div>
+            <div class="metric-value" id="card-dew">—</div>
+            <div class="metric-unit">°C (JEDEC)</div>
+            <div class="minmax-bar-wrap">
+                <div class="minmax-bar-track">
+                    <div class="minmax-bar-fill" id="bar-dew" style="width:50%"></div>
+                </div>
+            </div>
+            <div class="metric-minmax">
+                <div class="minmax-item">
+                    <span class="minmax-label">Min</span>
+                    <span class="minmax-val min" id="stat-min-dew">—</span>
+                    <span class="minmax-label">°C</span>
+                </div>
+                <div class="minmax-item">
+                    <span class="minmax-label">Max</span>
+                    <span class="minmax-val max" id="stat-max-dew">—</span>
+                    <span class="minmax-label">°C</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- CHART -->
+    <div class="chart-card">
+        <div class="chart-header">
+            <div>
+                <div class="chart-title">
+                    <i class="ti ti-chart-line"></i> Biểu Đồ Xu Hướng
+                </div>
+                <div class="chart-subtitle" id="chart-subtitle">Nhiệt độ &amp; độ ẩm theo thời gian</div>
+            </div>
+            <div class="chart-controls">
+                <div class="range-group">
+                    <button class="range-btn active" id="range-btn-1h"  onclick="switchChartRange('1h')">1h</button>
+                    <button class="range-btn"        id="range-btn-24h" onclick="switchChartRange('24h')">24h</button>
+                    <button class="range-btn"        id="range-btn-7d"  onclick="switchChartRange('7d')">7d</button>
+                </div>
+                <div class="chart-legend">
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:#ef4444"></div> Nhiệt độ (°C)
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:#3b82f6"></div> Độ ẩm (%)
+                    </div>
+                </div>
+            </div>
+        </div>
+        <canvas id="telemetryChart"></canvas>
+    </div>
+
+    <!-- BOTTOM: Recommendations | Settings + Email -->
+    <div class="bottom-grid">
+
+        <div class="panel">
+            <div class="panel-title"><i class="ti ti-stethoscope"></i> Khuyến Nghị Phân Tích</div>
+            <div class="rec-label">Y Tế — Humidex</div>
+            <div class="rec-text" id="med-rec">Đang tải...</div>
+            <div class="rec-label">Edge AI — KNN Classifier</div>
+            <div class="rec-text" id="mode-rec">Đang tải...</div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title"><i class="ti ti-settings"></i> Cài Đặt Hệ Thống</div>
+
+            <div class="form-row">
+                <label class="form-label">Chế Độ Hoạt Động</label>
+                <select class="form-select" id="mode-select">
+                    <option value="0">Kho bảo quản thuốc</option>
+                    <option value="1">Kho thiết bị điện tử</option>
+                    <option value="2">Kho nông sản</option>
+                    <option value="3">Nông nghiệp ngoài trời / Nhà màng</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <label class="form-label">Ngưỡng Nhiệt Độ cảnh báo (°C)</label>
+                <input type="number" class="form-input" id="max-temp" step="0.1">
+            </div>
+            <div class="form-row">
+                <label class="form-label">Ngưỡng Độ Ẩm cảnh báo (%)</label>
+                <input type="number" class="form-input" id="max-hum" step="0.1">
+            </div>
+            <button class="btn-primary" onclick="updateSettings()">
+                <i class="ti ti-device-floppy"></i> Lưu Cài Đặt
+            </button>
+
+            <!-- ========== EMAIL ALERT ========== -->
+            <div class="email-section">
+                <div class="email-section-title">
+                    <i class="ti ti-mail-forward"></i> Cảnh Báo Qua Email
+                </div>
+
+                <div class="email-toggle-row">
+                    <span class="toggle-label">Bật gửi email khi vượt ngưỡng</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="email-toggle" onchange="onEmailToggleChange()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="form-row">
+                    <label class="form-label">Địa chỉ email nhận cảnh báo</label>
+                    <input type="email" class="form-input" id="alert-email" placeholder="example@gmail.com">
+                </div>
+                <div class="form-row">
+                    <label class="form-label">Tên người nhận</label>
+                    <input type="text" class="form-input" id="alert-name" placeholder="Kỹ thuật viên / Quản lý kho">
+                </div>
+                <button class="btn-secondary" onclick="sendTestEmail()">
+                    <i class="ti ti-send"></i> Gửi email kiểm tra ngay
+                </button>
+
+                <div class="email-status" id="email-status"></div>
+
+                <div class="cooldown-wrap" id="cooldown-wrap">
+                    <div class="cooldown-label">
+                        <span>Thời gian chờ giữa 2 lần gửi</span>
+                        <span id="cooldown-text">—</span>
+                    </div>
+                    <div class="cooldown-track">
+                        <div class="cooldown-fill" id="cooldown-fill" style="width:100%"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- ========== END EMAIL ALERT ========== -->
+        </div>
+    </div>
+</div>
+
+<!-- ===================== HISTORY VIEW ===================== -->
+<div class="main-content" id="history-view" style="display:none">
+    <div class="history-toolbar">
+        <div class="section-title" style="margin-bottom:0">
+            <i class="ti ti-database" style="margin-right:5px;vertical-align:-1px"></i> Nhật Ký Dữ Liệu Hệ Thống
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+            <input type="date" class="date-input" id="history-date-picker" onchange="filterHistoryByDate()">
+            <button class="export-btn" onclick="exportToExcel()">
+                <i class="ti ti-download"></i> Xuất CSV
+            </button>
+        </div>
+    </div>
+    <div class="history-table-wrap">
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th>Thời Gian</th>
+                    <th>Nhiệt Độ</th>
+                    <th>Độ Ẩm</th>
+                </tr>
+            </thead>
+            <tbody id="history-table-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
