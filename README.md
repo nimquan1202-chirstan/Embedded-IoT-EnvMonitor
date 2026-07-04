@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**Đại học Quốc gia TP.HCM · Trường Đại học Khoa học Tự nhiên · Khoa Vật lý học**
+**Đại học Quốc gia TP.HCM · Trường Đại học Khoa học Tự nhiên · Khoa Vật lý-Vật Lý Kỹ Thuật**
 
 ---
 
